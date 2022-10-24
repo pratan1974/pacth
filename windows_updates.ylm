@@ -1,0 +1,11 @@
+- name: Windows Updates Search
+  hosts: all
+  tasks:
+  - name: Example from an Ansible Playbook
+    delegate_to: localhost
+    ansible.builtin.ping:
+  - name: Search-only, return list of found updates (if any), log to C:\ansible_wu.txt
+    ansible.windows.win_updates:
+      category_names: SecurityUpdates
+      state: searched
+      log_path: C:\ansible_wu.txt
