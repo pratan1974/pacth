@@ -9,7 +9,5 @@
 
   - name: report update results
     debug:
-      msg: |
-        {% for k in update_results.updates %}
-        {{ k.title }}
-        {% endfor %}
+      msg: 
+         update_results.updates
