@@ -1,0 +1,38 @@
+---
+- hosts: windows
+  gather_facts: yes
+  tasks:
+  - name: Generate update sql windows
+    local_action:
+      module: community.general.database.mssql.mssql_script
+      login_user: {{ db.user }}
+      login_password: {{ db.password }}
+      login_host: {{ db.server }}
+      login_port: {{ sb.port }}
+      db: {{ db.name}}
+      script: |
+         {% for host in groups['windows'] %}
+         {% if hostvars[host]['ansible_facts']['distribution'] is defined %}
+         if not exists (select * from t_hosts where machine_id = '{{ ansible_facts.machine_id }}') INSERT INTO t_hosts (machine_id, fqdn, os_name, os_product_type, distribution_major_version, distribution_version, architecture, os_family, ip_addresses, memtotal_mb, product_name, virtualization_type, windows_domain, processor, processor_cores, processor_count, processor_vcpus, processor_threads_per_core) VALUES ('{{ ansible_facts.machine_id }}','{{ ansible_facts.fqdn }}','{{ ansible_facts.os_name }}','{{ ansible_facts.os_product_type }}','{{ ansible_facts.distribution_major_version }}','{{ ansible_facts.distribution_version }}','{{ ansible_facts.architecture }}','{{ ansible_facts.os_family }}','{{ ansible_facts.ip_addresses[0] }}','{{ ansible_facts.memtotal_mb }}','{{ ansible_facts.product_name }}','{{ ansible_facts.virtualization_type }}','{{ ansible_facts.windows_domain }}','{{ ansible_facts.processor[0] }}','{{ ansible_facts.processor_cores }}','{{ ansible_facts.processor_count }}','{{ ansible_facts.processor_vcpus }}','{{ ansible_facts.processor_threads_per_core}}') Else UPDATE T_HOSTS SET fqdn = '{{ ansible_facts.fqdn }}', os_name = '{{ ansible_facts.os_name }}',os_product_type = '{{ ansible_facts.os_product_type }}',distribution_major_version = '{{ ansible_facts.distribution_major_version }}', distribution_version = '{{ ansible_facts.distribution_version }}',architecture = '{{ ansible_facts.architecture }}',os_family = '{{ ansible_facts.os_family }}',ip_addresses = '{{ ansible_facts.ip_addresses[1] }}', memtotal_mb = '{{ ansible_facts.memtotal_mb }}',product_name = '{{ ansible_facts.product_name }}', virtualization_type = '{{ ansible_facts.virtualization_type }}', windows_domain = '{{ ansible_facts.windows_domain }}',processor = '{{ ansible_facts.processor[2] }}', processor_cores = '{{ ansible_facts.processor_cores }}', processor_count = '{{ ansible_facts.processor_count }}',processor_vcpus = '{{ ansible_facts.processor_vcpus }}', processor_threads_per_core = '{{ ansible_facts.processor_threads_per_core}}' WHERE machine_id = '{{ ansible_facts.machine_id }}'
+         {% endif %}
+         {% endfor %}
+    ignore_errors: yes
+
+- hosts: unix
+  gather_facts: yes
+  tasks:
+  - name: Generate update sql unix
+    local_action:
+      module: community.general.database.mssql.mssql_script
+      login_user: {{ db.user }}
+      login_password: {{ db.password }}
+      login_host: {{ db.server }}
+      login_port: {{ sb.port }}
+      db: {{ db.name}}
+      script: |
+         {% for host in groups['unix'] %}
+         {% if hostvars[host]['ansible_machine_id'] is defined %}
+         if not exists (select * from t_hosts where machine_id = '{{ ansible_machine_id }}') INSERT INTO t_hosts (machine_id, fqdn, os_name, os_product_type, distribution_major_version, distribution_version, architecture, os_family, ip_addresses, memtotal_mb, product_name, virtualization_type, windows_domain, processor, processor_cores, processor_count, processor_vcpus, processor_threads_per_core) VALUES ( '{{ ansible_machine_id }}', '{{ ansible_hostname }}', '{{ ansible_distribution }}', 'Not Available', '{{ ansible_distribution_major_version }}', '{{ ansible_distribution_version }}', '{{ ansible_architecture }}', '{{ ansible_os_family }}', '{{ ansible_all_ipv4_addresses[0] }}', '{{ ansible_memtotal_mb }}', '{{ ansible_product_name }}', '{{ ansible_virtualization_type }}', '{{ ansible_domain }}', '{{ ansible_processor[1] }}', '{{ ansible_processor_cores }}', '{{ ansible_processor_count }}', '{{ ansible_processor_vcpus }}', '{{ ansible_processor_threads_per_core}}') Else UPDATE T_HOSTS SET fqdn = '{{ ansible_hostname }}', os_name = '{{ ansible_distribution }}', os_product_type = 'Not Available', distribution_major_version = '{{ ansible_distribution_major_version }}', distribution_version = '{{ ansible_distribution_version }}', architecture = '{{ ansible_architecture }}', os_family = '{{ ansible_os_family }}', ip_addresses = '{{ ansible_all_ipv4_addresses[1] }}', memtotal_mb = '{{ ansible_memtotal_mb }}', product_name = '{{ ansible_product_name }}', virtualization_type = '{{ ansible_virtualization_type }}', windows_domain = '{{ ansible_domain }}', processor = '{{ ansible_processor[1] }}', processor_cores = '{{ ansible_processor_cores }}', processor_count = '{{ ansible_processor_count }}', processor_vcpus = '{{ ansible_processor_vcpus }}', processor_threads_per_core = '{{ ansible_processor_threads_per_core}}' WHERE machine_id = '{{ ansible_machine_id }}'
+         {% endif %}
+         {% endfor %}
+    ignore_errors: yes
