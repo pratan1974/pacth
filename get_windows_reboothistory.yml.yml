@@ -1,0 +1,67 @@
+---
+- hosts: all
+  tasks:
+  - name: Get Reboot History
+    win_shell: |
+      
+    [CmdletBinding()]
+    param(
+        [Parameter(
+            Mandatory = $false,
+            ValueFromPipeline = $true,
+            ValueFromPipelineByPropertyName = $true
+        )]
+        [string[]]  $ComputerName = $env:COMPUTERNAME,
+ 
+        [int]       $DaysFromToday = 7,
+ 
+        [int]       $MaxEvents = 9999
+     )
+ 
+     BEGIN {}
+ 
+     PROCESS {
+        foreach ($Computer in $ComputerName) {
+            try {
+                $Computer = $Computer.ToUpper()
+                $EventList = Get-WinEvent -ComputerName $Computer -FilterHashtable @{
+                    Logname = 'system'
+                    Id = '1074', '6008'
+                    StartTime = (Get-Date).AddDays(-$DaysFromToday)
+                } -MaxEvents $MaxEvents -ErrorAction Stop
+ 
+ 
+                foreach ($Event in $EventList) {
+                    if ($Event.Id -eq 1074) {
+                        [PSCustomObject]@{
+                            TimeStamp    = $Event.TimeCreated
+                            ComputerName = $Computer
+                            UserName     = $Event.Properties.value[6]
+                            ShutdownType = $Event.Properties.value[4]
+                        }
+                    }
+ 
+                    if ($Event.Id -eq 6008) {
+                        [PSCustomObject]@{
+                            TimeStamp    = $Event.TimeCreated
+                            ComputerName = $Computer
+                            UserName     = $null
+                            ShutdownType = 'unexpected shutdown'
+                        }
+                    }
+ 
+                }
+ 
+            } catch {
+                Write-Error $_.Exception.Message
+ 
+            }
+        }
+     }
+ 
+     END {}
+    register: reboothistory_results
+    
+    - name:
+      debug:
+        msg: " {{ reboothistory_results.stdout_lines }} "
