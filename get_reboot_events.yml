@@ -1,0 +1,91 @@
+---
+- hosts: windows
+  gather_facts: no
+  tasks:
+  - name: Get Reboot History
+    ansible.windows.win_powershell:
+      script: |
+
+        [CmdletBinding()]
+        param(
+            [Parameter(
+                Mandatory = $false,
+                ValueFromPipeline = $true,
+                ValueFromPipelineByPropertyName = $true
+             )]
+             [string[]]  $ComputerName = $env:COMPUTERNAME,
+
+             [int]       $DaysFromToday = 300,
+
+             [int]       $MaxEvents = 9999
+        )
+
+        BEGIN {}
+
+        PROCESS {
+            foreach ($Computer in $ComputerName) {
+                try {
+                $Computer = $Computer.ToUpper()
+                $EventList = Get-WinEvent -ComputerName $Computer -FilterHashtable @{
+                    Logname = 'system'
+                    Id = '1074', '6008'
+                    StartTime = (Get-Date).AddDays(-$DaysFromToday)
+                } -MaxEvents $MaxEvents -ErrorAction Stop
+
+
+                foreach ($Event in $EventList) {
+                    if ($Event.Id -eq 1074) {
+                        [PSCustomObject]@{
+                            ID           = $Event.Id
+                            TimeStamp    = $Event.TimeCreated -f "yyyyMMdd"
+                            ComputerName = $Computer
+                            UserName     = $Event.Properties.value[6]
+                            ShutdownType = $Event.Properties.value[4]
+                            Process      = $Event.Properties.value[0]
+                            Reason       = $Event.Properties.value[2]
+                            Comment      = $Event.Properties.value[5]
+                        }
+                    }
+
+                    if ($Event.Id -eq 6008) {
+                        [PSCustomObject]@{
+                            ID           = $Event.Id
+                            TimeStamp    = $Event.TimeCreated -f "yyyyMMdd"
+                            ComputerName = $Computer
+                            UserName     = $null
+                            ShutdownType = 'unexpected shutdown'
+                            Process      = $null
+                            Reason       = 'was unexpected'
+                            Comment      = 'event on ' + $Event.Properties.value[1] +' ' + $Event.Properties.value[0]
+                        }
+                    }
+
+                }
+
+               } catch {
+                  Write-Error $_.Exception.Message
+
+              }
+            }
+        }
+    register: reboothistory_results
+
+
+  - name: cenas
+    set_fact:
+       history: "{{ reboothistory_results.output |to_json}}"
+
+  - name: Generate update sql windows
+    local_action:
+      module: community.general.mssql_script
+      login_user: sa
+      login_password: Password123
+      login_host: windb
+      login_port: 1433
+      db: CMDB
+      script: |
+        if not exists (select * from T_Reboots where (id = '{{ item.ID }}' and timestamp = '{{item.TimeStamp}}'))
+        INSERT INTO t_reboots (id, host, timestamp, shutdowntype, username, process, reason, comment) VALUES ('{{item.ID}}','{{ item.ComputerName }}','{{ item.TimeStamp }}','{{ item.ShutdownType }}','{{ item.UserName }}','{{item.Process}}','{{item.Reason}}','{{item.Comment}}')
+    with_items: "{{history | from_json}}"
+    ignore_errors: yes
+    register: sql_result
